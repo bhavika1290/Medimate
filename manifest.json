@@ -1,0 +1,23 @@
+{
+  "name": "Reminder App",
+  "short_name": "Reminders",
+  "description": "A simple, installable reminder application with alarms.",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#3f4f46",
+  "theme_color": "#3B82F6",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3e%3c/svg%3e",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3e%3c/svg%3e",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

@@ -1,0 +1,271 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Medimate</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="manifest.json">
+</head>
+
+<body class="min-h-screen bg-cover bg-center relative font-sans" style="background-image: url('medicine.jpg');">
+
+  <!-- Overlay to darken background slightly -->
+  <div class="absolute inset-0 bg-black opacity-30"></div>
+
+  <div class="relative z-10 container mx-auto max-w-6xl p-4 sm:p-6 lg:p-8 flex flex-col md:flex-row md:space-x-8">
+
+    <!-- Left Panel: Add Reminder -->
+    <div class="md:w-2/5 lg:w-1/3">
+      <div class="bg-white/80 backdrop-blur-md p-6 rounded-3xl shadow-2xl mb-6 md:mb-0">
+        <header class="text-left mb-6">
+          <h1 class="text-4xl font-bold text-blue-600 dark:text-blue-500">Medimate</h1>
+          <p class="text-gray-700 dark:text-gray-300 mt-1">Get notified and stay healthy.</p>
+        </header>
+
+        <hr class="mb-6 border-gray-300">
+
+        <h2 class="text-2xl font-semibold mb-4">Add a New Medicine</h2>
+
+        <div class="space-y-4">
+          <input type="text" id="reminderText" placeholder="Medicine Name" class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+          <input type="datetime-local" id="reminderTime" class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+          <input type="text" id="additionalInfo" placeholder="Additional Info" class="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+
+          <button id="addReminderBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-transform transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-blue-300">
+            Set Reminder
+          </button>
+        </div>
+      </div>
+
+      <button id="viewRemindersBtn" class="w-full mt-4 md:hidden bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-4 rounded-lg transition">
+        View All Reminders
+      </button>
+    </div>
+
+    <!-- Right Panel: Reminder List -->
+    <div id="reminderSection" class="md:w-3/5 lg:w-2/3 mt-8 md:mt-0 flex flex-col hidden">
+      <div class="bg-white/80 backdrop-blur-md p-6 rounded-3xl shadow-2xl flex-1 overflow-y-auto max-h-[75vh]">
+        <h2 class="text-2xl font-semibold mb-4 text-black">Upcoming Reminders</h2>
+        <div class="space-y-4" id="reminderList">
+          <p class="text-gray-600">No reminders set yet.</p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Alarm Modal -->
+  <div id="alarmModal" class="fixed hidden inset-0 bg-black bg-opacity-70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+    <div class="bg-white/90 dark:bg-gray-800 rounded-2xl p-8 max-w-sm w-full text-center">
+      <h3 class="text-2xl font-bold mb-2 text-red-500">Reminder!</h3>
+      <p id="alarmText" class="text-lg text-gray-600 dark:text-gray-300 mb-6">Your reminder is due.</p>
+      <button id="stopAlarmBtn" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg transition">Stop Alarm</button>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="fixed bottom-5 right-5 text-white py-2 px-4 rounded-lg shadow-lg opacity-0 transition-all duration-300"></div>
+
+  <script>
+   document.addEventListener("DOMContentLoaded", () => {
+    const addReminderBtn = document.getElementById("addReminderBtn");
+    const reminderList = document.getElementById("reminderList");
+    const alarmModal = document.getElementById("alarmModal");
+    const alarmText = document.getElementById("alarmText");
+    const stopAlarmBtn = document.getElementById("stopAlarmBtn");
+
+    let reminders = JSON.parse(localStorage.getItem("reminders")) || [];
+    let audioCtx;
+    let alarmState = { oscillator: null, gainNode: null, interval: null, timeout: null };
+
+    const stopAlarmSound = () => {
+      if (alarmState.interval) {
+        clearInterval(alarmState.interval);
+        clearTimeout(alarmState.timeout);
+        alarmState.oscillator.stop();
+        alarmState.interval = null;
+        alarmState.timeout = null;
+        alarmState.oscillator = null;
+        alarmModal.classList.add("hidden");
+      }
+    };
+
+    const startAlarmSound = (reminder) => {
+      if (alarmState.interval) return;
+
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+
+       alarmText.innerHTML = `<strong>${reminder.text}</strong><br>${reminder.description || ''}`;
+        alarmModal.classList.remove("hidden");
+
+        const oscillator = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+
+        oscillator.type = 'square';
+        oscillator.frequency.setValueAtTime(880, audioCtx.currentTime);
+
+        let isBeeping = true;
+        gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime);
+
+        alarmState.interval = setInterval(() => {
+          gainNode.gain.setValueAtTime(isBeeping ? 0 : 0.5, audioCtx.currentTime);
+          isBeeping = !isBeeping;
+        }, 400);
+
+        oscillator.start();
+        alarmState.oscillator = oscillator;
+        alarmState.timeout = setTimeout(stopAlarmSound, 10000);
+
+      } catch (e) {
+        console.error(e);
+        alarmModal.classList.add("hidden");
+      }
+    };
+
+    const renderReminders = () => {
+      reminderList.innerHTML = reminders.length === 0
+        ? `<p class="text-center text-gray-500 dark:text-gray-400 p-4">No reminders set yet.</p>`
+        : reminders
+          .sort((a, b) => new Date(a.time) - new Date(b.time))
+          .map(r => `
+            <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg shadow-sm flex items-center justify-between" data-id="${r.id}">
+              <div>
+                <p class="font-semibold text-lg">${r.text}</p>
+                <p class="text-sm text-gray-500 dark:text-gray-400">${new Date(r.time).toLocaleString()}</p>
+              </div>
+              <button class="delete-btn text-red-500 hover:text-red-700 p-2 rounded-full">✖</button>
+            </div>
+          `).join("");
+    };
+
+   const addReminder = async () => {
+  await Notification.requestPermission();
+
+  const reminderText = document.getElementById("reminderText");
+  const reminderTime = document.getElementById("reminderTime");
+  const additionalInfo = document.getElementById("additionalInfo"); // new input field
+
+  const text = reminderText.value.trim();
+  const time = reminderTime.value;
+  const description = additionalInfo.value.trim(); // capture description
+
+  if (!text || !time) return;
+
+  const newReminder = { 
+    id: Date.now(), 
+    text, 
+    description, // save description
+    time 
+  };
+
+  reminders.push(newReminder);
+  localStorage.setItem("reminders", JSON.stringify(reminders));
+  renderReminders();
+
+  reminderText.value = "";
+  reminderTime.value = "";
+  additionalInfo.value = "";
+
+  document.getElementById("reminderSection").classList.remove("hidden");
+};
+
+
+    const deleteReminder = (id) => {
+      reminders = reminders.filter(reminder => reminder.id !== id);
+      localStorage.setItem("reminders", JSON.stringify(reminders));
+      renderReminders();
+    };
+
+    // 🚀 NEW: Send email or SMS notification via backend
+    const sendNotification = async (reminder) => {
+  try {
+    await fetch("http://localhost:5000/sendNotification", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: `Your ${reminder.text} is getting expired`, // dynamic medicine name
+        email: "2023mcb1290@iitrpr.com", // replace with actual user email input
+        phone: "+918968996927"           // replace with actual user phone input
+      }),
+    });
+  } catch (err) {
+    console.error("Failed to send notification:", err);
+  }
+};
+
+
+    const triggerAlarm = (reminder) => {
+      if (!document.hidden) startAlarmSound(reminder);
+
+      if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({
+          type: "show-notification",
+           payload: { 
+      title: "Reminder", 
+      body: `${reminder.text}${reminder.description ? ' - ' + reminder.description : ''}`, 
+      id: reminder.id 
+    }
+        });
+      }
+
+      // 🔔 Send Email/SMS too
+      sendNotification(reminder);
+    };
+
+    const checkReminders = () => {
+      let remindersTriggered = false;
+      const now = Date.now();
+
+      reminders = reminders.filter(r => {
+        if (now >= new Date(r.time).getTime()) {
+          triggerAlarm(r);
+          remindersTriggered = true;
+          return false;
+        }
+        return true;
+      });
+
+      if (remindersTriggered) {
+        localStorage.setItem("reminders", JSON.stringify(reminders));
+        renderReminders();
+      }
+    };
+
+    addReminderBtn.addEventListener("click", addReminder);
+    stopAlarmBtn.addEventListener("click", stopAlarmSound);
+    reminderList.addEventListener("click", (e) => {
+      if (e.target.closest(".delete-btn")) {
+        deleteReminder(Number(e.target.closest("div[data-id]").dataset.id));
+      }
+    });
+
+    document.getElementById("viewRemindersBtn").addEventListener("click", () => {
+      document.getElementById("reminderSection").classList.toggle("hidden");
+    });
+
+    navigator.serviceWorker
+      .register("sw.js")
+      .then(() => console.log("Service worker registered"))
+      .catch(err => console.error(err));
+
+    setInterval(checkReminders, 5000);
+    renderReminders();
+  });
+  </script>
+
+</body>
+</html>
